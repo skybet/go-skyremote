@@ -1,8 +1,7 @@
-package main
+package skyremote
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"net"
 )
@@ -62,71 +61,50 @@ type SkyRemote struct {
 }
 
 // SendCommand to Sky box
-func (s *SkyRemote) SendCommand(c Command) error {
-	// Create the byte sequence
-	cmd := []byte{4, 1, 0, 0, 0, 0, byte(int(math.Floor(224 + float64((c / 16))))), byte(c % 16)}
-
+func (s *SkyRemote) SendCommand(c Command) (err error) {
+	// Attempt to connect
 	addr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", s.Host, s.Port))
 	if err != nil {
-		return err
+		return
 	}
 	conn, err := net.DialTCP("tcp", nil, addr)
-	//defer conn.Close()
 	if err != nil {
-		return err
+		return
 	}
-	buff := make([]byte, 1024)
-	n, err := conn.Read(buff)
-	if err != nil {
-		return err
-	}
-	log.Printf("Received: % x\n", buff[:n])
 
-	log.Printf("Sending: % x\n", buff[:12])
-	n, err = conn.Write(buff[:12])
-	if err != nil {
-		return err
-	}
-	n, err = conn.Read(buff)
-	if err != nil {
-		return err
-	}
-	log.Printf("Received: % x\n", buff[:n])
+	// This will hold data from the socket while we examine it
+	buff := make([]byte, 256)
+	// Create the byte sequence
+	cmd := []byte{4, 1, 0, 0, 0, 0, byte(int(math.Floor(224 + float64((c / 16))))), byte(c % 16)}
+	// When this is true, we are done
+	var done bool
 
-	log.Printf("Sending: % x\n", buff[:1])
-	n, err = conn.Write(buff[:1])
-	if err != nil {
-		return err
+	for !done {
+		if n, err := conn.Read(buff); err == nil {
+			switch {
+			// The first part of the handshake - 12 byte sequence received
+			// we are to return it back verbatim
+			case n == 12:
+				_, err = conn.Write(buff[:12])
+			// Two short sequences follow
+			// we are to return the first byte of each
+			case n < 12:
+				_, err = conn.Write(buff[:1])
+			// The final sequence received is 24 0x00s
+			// after this we can send out command sequence
+			case n == 24:
+				_, err = conn.Write(cmd)
+				done = true
+			// Dunno - panic?
+			default:
+				err = fmt.Errorf("Unexpected byte sequence received: % x")
+				done = true
+			}
+		} else {
+			break
+		}
 	}
-	n, err = conn.Read(buff)
-	if err != nil {
-		return err
-	}
-	log.Printf("Received: % x\n", buff[:n])
-
-	log.Printf("Sending: % x\n", buff[:1])
-	n, err = conn.Write(buff[:1])
-	if err != nil {
-		return err
-	}
-	n, err = conn.Read(buff)
-	if err != nil {
-		return err
-	}
-	log.Printf("Received: % x\n", buff[:n])
-
-	log.Printf("Sending: % x\n", cmd)
-	n, err = conn.Write(cmd)
-	if err != nil {
-		return err
-	}
+	// Clean up
 	conn.Close()
-	return nil
-}
-
-func main() {
-	s := SkyRemote{Host: "172.16.4.51", Port: 49160}
-	if err := s.SendCommand(CmdGreen); err != nil {
-		log.Fatalf("Error: %s", err)
-	}
+	return
 }
