@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"strconv"
 
 	skyremote "github.com/skybet/go-skyremote"
 	flag "github.com/spf13/pflag"
@@ -20,18 +19,7 @@ func main() {
 		log.Fatalf("Channel must be 3 digits long")
 	}
 	s := skyremote.SkyRemote{Host: *ip, Port: *port}
-
-	for _, n := range *channel {
-		i, err := strconv.ParseInt(string(n), 10, 0)
-		if err != nil {
-			log.Fatalf("Error parsing integer: %s", err)
-		}
-		c, err := s.CommandFromDigit(int(i))
-		if err != nil {
-			log.Fatalf("Error parsing channel: %s", err)
-		}
-		if err := s.SendCommand(c); err != nil {
-			log.Fatalf("Error sending command: %s", err)
-		}
+	if err := s.ChangeChannel(*channel); err != nil {
+		log.Fatalf("Error changing channel: %s", err)
 	}
 }

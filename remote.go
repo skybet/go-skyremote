@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strconv"
 )
 
 // Command represents a button on the remote
@@ -67,6 +68,24 @@ func (s *SkyRemote) CommandFromDigit(n int) (Command, error) {
 		return Cmd0, errors.New("Must be a single digit between 0 and 9")
 	}
 	return Command(n + int(Cmd0)), nil
+}
+
+// ChangeChannel on a Sky box, takes in a string e.g. "115"
+func (s *SkyRemote) ChangeChannel(ch string) error {
+	for _, n := range ch {
+		i, err := strconv.ParseInt(string(n), 10, 0)
+		if err != nil {
+			return err
+		}
+		c, err := s.CommandFromDigit(int(i))
+		if err != nil {
+			return err
+		}
+		if err := s.SendCommand(c); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SendCommand to Sky box
