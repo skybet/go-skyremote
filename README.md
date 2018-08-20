@@ -1,5 +1,7 @@
 # go-skyremote
 
+[![CircleCI](https://circleci.com/gh/skybet/go-skyremote.svg?style=svg)](https://circleci.com/gh/skybet/go-skyremote) [![CodeFactor](https://www.codefactor.io/repository/github/skybet/go-skyremote/badge)](https://www.codefactor.io/repository/github/skybet/go-skyremote)
+
 *IMPORTANT - This is not an official library by BSkyB* 
 
 Go library for controlling Sky+HD and SkyQ boxes over IP
