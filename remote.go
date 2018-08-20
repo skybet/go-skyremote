@@ -56,13 +56,26 @@ const (
 	CmdSky         Command = 241
 )
 
+// DialFunc is a function used to connect to remote boxes
+type DialFunc func(host string, port int) (net.Conn, error)
+
 // SkyRemote allows us to control Sky+HD and SkyQ boxes over IP
 type SkyRemote struct {
-	Host string
-	Port int
+	Host   string
+	Port   int
+	Dialer DialFunc
 }
 
-// CommandFromDigit returns the correct command from a signle digit 0-9
+// New SkyRemote with default TCP dialer
+func New(host string, port int) *SkyRemote {
+	return &SkyRemote{
+		Host:   host,
+		Port:   port,
+		Dialer: TCPDialer,
+	}
+}
+
+// CommandFromDigit returns the correct command from a single digit 0-9
 func (s *SkyRemote) CommandFromDigit(n int) (Command, error) {
 	if n > 9 {
 		return Cmd0, errors.New("Must be a single digit between 0 and 9")
@@ -89,54 +102,63 @@ func (s *SkyRemote) ChangeChannel(ch string) error {
 }
 
 // SendCommand to Sky box
-func (s *SkyRemote) SendCommand(c Command) (err error) {
+func (s *SkyRemote) SendCommand(c Command) error {
 	// Attempt to connect
-	addr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", s.Host, s.Port))
+	conn, err := s.Dialer(s.Host, s.Port)
 	if err != nil {
-		return
-	}
-	conn, err := net.DialTCP("tcp", nil, addr)
-	if err != nil {
-		return
+		return err
 	}
 
 	// This will hold data from the socket while we examine it
 	buff := make([]byte, 256)
 	// Create the byte sequence
 	cmd := []byte{4, 1, 0, 0, 0, 0, byte(int(math.Floor(224 + float64((c / 16))))), byte(c % 16)}
-	// When this is true, we are done
-	var done bool
 
-	for !done {
-		if n, err := conn.Read(buff); err == nil {
-			switch {
-			// The first part of the handshake - 12 byte sequence received
-			// we are to return it back verbatim
-			case n == 12:
-				_, err = conn.Write(buff[:12])
-			// Two short sequences follow
-			// we are to return the first byte of each
-			case n < 12:
-				_, err = conn.Write(buff[:1])
-			// The final sequence received is 24 0x00s
-			// after this we can send out command sequence
-			case n == 24:
-				_, err = conn.Write(cmd)
-				// We also have to change the second byte to 0x00 and send again
-				// for reasons unknown
-				cmd[1] = 0
-				_, err = conn.Write(cmd)
-				done = true
-			// Dunno - panic?
-			default:
-				err = fmt.Errorf("Unexpected byte sequence received: % x")
-				done = true
-			}
-		} else {
-			break
+loop:
+	for err == nil {
+		n, e := conn.Read(buff)
+		if e != nil {
+			return e
+		}
+
+		switch {
+		// The first part of the handshake - 12 byte sequence received
+		// we are to return it back verbatim
+		case n == 12:
+			_, err = conn.Write(buff[:12])
+		// Two short sequences follow
+		// we are to return the first byte of each
+		case n < 12:
+			_, err = conn.Write(buff[:1])
+		// The final sequence received is 24 0x00s
+		// after this we can send out command sequence
+		case n == 24:
+			_, err = conn.Write(cmd)
+			// We also have to change the second byte to 0x00 and send again
+			// for reasons unknown
+			cmd[1] = 0
+			_, err = conn.Write(cmd)
+			break loop
+		// Dunno - panic?
+		default:
+			err = fmt.Errorf("Unexpected byte sequence received: % x", buff[:n])
+			break loop
 		}
 	}
 	// Clean up
 	conn.Close()
-	return
+	return err
+}
+
+// TCPDialer returns a TCP connection
+func TCPDialer(host string, port int) (net.Conn, error) {
+	addr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", host, port))
+	if err != nil {
+		return nil, err
+	}
+	conn, err := net.DialTCP("tcp", nil, addr)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }

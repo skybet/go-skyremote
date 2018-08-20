@@ -18,7 +18,7 @@ func main() {
 	if len(*channel) != 3 {
 		log.Fatalf("Channel must be 3 digits long")
 	}
-	s := skyremote.SkyRemote{Host: *ip, Port: *port}
+	s := skyremote.New(*ip, *port)
 	if err := s.ChangeChannel(*channel); err != nil {
 		log.Fatalf("Error changing channel: %s", err)
 	}
