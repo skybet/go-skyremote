@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"strconv"
+	"time"
 )
 
 // Command represents a button on the remote
@@ -88,7 +89,7 @@ func (s *SkyRemote) ChangeChannel(ch string) error {
 	for _, n := range ch {
 		i, err := strconv.ParseInt(string(n), 10, 0)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid channel (%s), must be numberic", ch)
 		}
 		c, err := s.CommandFromDigit(int(i))
 		if err != nil {
@@ -156,8 +157,9 @@ func TCPDialer(host string, port int) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn, err := net.DialTCP("tcp", nil, addr)
+	conn, err := net.DialTimeout("tcp4", addr.String(), 2*time.Second)
 	if err != nil {
+		// handle error
 		return nil, err
 	}
 	return conn, nil
